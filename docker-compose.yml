@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: infofi_postgres
+    environment:
+      POSTGRES_USER: infofi
+      POSTGRES_PASSWORD: infofi123
+      POSTGRES_DB: infofi_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infofi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: infofi_backend
+    environment:
+      DATABASE_URL: postgresql://infofi:infofi123@postgres:5432/infofi_db
+      CORS_ORIGINS: http://localhost:3000
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRATION: 3600
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: uvicorn server:app --host 0.0.0.0 --port 8001 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: infofi_frontend
+    environment:
+      REACT_APP_BACKEND_URL: http://localhost:8001
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
