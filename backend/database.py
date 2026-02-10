@@ -169,7 +169,7 @@ class AdminAction(Base):
     target_type = Column(String(50), nullable=False)
     target_id = Column(Integer, nullable=False)
     reason = Column(Text, nullable=True)
-    metadata = Column(Text, nullable=True)
+    action_metadata = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
 def init_db():
