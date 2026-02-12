@@ -1,6 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { useAccount, useDisconnect } from 'wagmi';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { BrowserProvider } from 'ethers';
 import axios from 'axios';
 
 const AuthContext = createContext();
@@ -13,15 +12,9 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  const { address: evmAddress, isConnected: isEvmConnected, chain } = useAccount();
-  const { publicKey: solanaPublicKey, connected: isSolanaConnected, wallet: solanaWallet } = useWallet();
-  const { disconnect: disconnectEvm } = useDisconnect();
-  const { disconnect: disconnectSolana } = useWallet();
-
-  const connectedAddress = evmAddress || solanaPublicKey?.toString();
-  const isConnected = isEvmConnected || isSolanaConnected;
-  const chainType = evmAddress ? (chain?.name?.toLowerCase() || 'ethereum') : 'solana';
+  const [connectedAddress, setConnectedAddress] = useState(null);
+  const [provider, setProvider] = useState(null);
+  const [chainName, setChainName] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -41,6 +34,36 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const connectWallet = async () => {
+    if (!window.ethereum) {
+      alert('Please install MetaMask or another Web3 wallet');
+      return;
+    }
+
+    try {
+      const provider = new BrowserProvider(window.ethereum);
+      const accounts = await provider.send('eth_requestAccounts', []);
+      const network = await provider.getNetwork();
+      
+      const chainId = Number(network.chainId);
+      const chainNames = {
+        1: 'ethereum',
+        8453: 'base',
+        137: 'polygon',
+        56: 'bnb'
+      };
+      
+      setProvider(provider);
+      setConnectedAddress(accounts[0]);
+      setChainName(chainNames[chainId] || 'ethereum');
+      
+      return { address: accounts[0], chain: chainNames[chainId] || 'ethereum' };
+    } catch (error) {
+      console.error('Wallet connection failed:', error);
+      throw error;
+    }
+  };
+
   const authenticate = async (signature, challenge) => {
     setLoading(true);
     try {
@@ -48,7 +71,7 @@ export function AuthProvider({ children }) {
         wallet_address: connectedAddress,
         challenge,
         signature,
-        chain_type: chainType
+        chain_type: chainName
       });
       
       localStorage.setItem('token', response.data.access_token);
@@ -68,8 +91,8 @@ export function AuthProvider({ children }) {
     delete axios.defaults.headers.common['Authorization'];
     setUser(null);
     setIsAuthenticated(false);
-    if (isEvmConnected) disconnectEvm();
-    if (isSolanaConnected) disconnectSolana();
+    setConnectedAddress(null);
+    setProvider(null);
   };
 
   const refreshUser = async () => {
@@ -84,8 +107,9 @@ export function AuthProvider({ children }) {
     loading,
     isAuthenticated,
     connectedAddress,
-    isConnected,
-    chainType,
+    provider,
+    chainName,
+    connectWallet,
     authenticate,
     logout,
     refreshUser
