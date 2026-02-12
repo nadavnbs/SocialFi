@@ -1,20 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAccount, useSignMessage } from 'wagmi';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { useWalletModal } from '@solana/wallet-adapter-react-ui';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import { toast, Toaster } from 'sonner';
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, connectedAddress, chainType, authenticate } = useAuth();
-  const { address: evmAddress, isConnected: isEvmConnected } = useAccount();
-  const { signMessage: signEVMMessage } = useSignMessage();
-  const { publicKey, signMessage: signSolanaMessage, connected: isSolanaConnected } = useWallet();
-  const { setVisible: setSolanaModalVisible } = useWalletModal();
+  const { isAuthenticated, connectedAddress, provider, chainName, connectWallet, authenticate } = useAuth();
   
   const [challenge, setChallenge] = useState(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -35,7 +27,7 @@ export default function LandingPage() {
     try {
       const response = await axios.post('/auth/challenge', {
         wallet_address: connectedAddress,
-        chain_type: chainType
+        chain_type: chainName
       });
       setChallenge(response.data.challenge);
       toast.info('Sign the message to authenticate');
@@ -44,21 +36,22 @@ export default function LandingPage() {
     }
   };
 
+  const handleConnect = async () => {
+    try {
+      await connectWallet();
+      toast.success('Wallet connected!');
+    } catch (error) {
+      toast.error('Failed to connect wallet');
+    }
+  };
+
   const handleSignAndAuthenticate = async () => {
-    if (!challenge || isAuthenticating) return;
+    if (!challenge || isAuthenticating || !provider) return;
     
     setIsAuthenticating(true);
     try {
-      let signature;
-      
-      if (evmAddress) {
-        const result = await signEVMMessage({ message: challenge });
-        signature = result;
-      } else if (publicKey) {
-        const messageBytes = new TextEncoder().encode(challenge);
-        const signedMessage = await signSolanaMessage(messageBytes);
-        signature = Buffer.from(signedMessage).toString('hex');
-      }
+      const signer = await provider.getSigner();
+      const signature = await signer.signMessage(challenge);
 
       if (signature) {
         await authenticate(signature, challenge);
@@ -134,31 +127,18 @@ export default function LandingPage() {
                     </p>
                   </div>
                   
-                  {/* EVM Chains */}
                   <div className="flex justify-center">
-                    <ConnectButton.Custom>
-                      {({ openConnectModal }) => (
-                        <button onClick={openConnectModal} className="pixel-btn">
-                          🌐 CONNECT EVM WALLET
-                        </button>
-                      )}
-                    </ConnectButton.Custom>
-                  </div>
-
-                  {/* Solana */}
-                  <div className="flex justify-center">
-                    <button
-                      onClick={() => setSolanaModalVisible(true)}
-                      className="pixel-btn"
-                      style={{ borderColor: '#ec4899', color: '#ec4899', background: 'rgba(236, 72, 153, 0.1)' }}
-                    >
-                      ◆ CONNECT SOLANA
+                    <button onClick={handleConnect} className="pixel-btn" data-testid="connect-wallet-button">
+                      🌐 CONNECT WALLET
                     </button>
                   </div>
 
                   <div className="text-center">
                     <p className="font-['Space_Mono'] text-xs text-muted-foreground">
-                      Supports: Ethereum • Base • Polygon • BNB • Solana
+                      Supports: Ethereum • Base • Polygon • BNB Chain
+                    </p>
+                    <p className="font-['Space_Mono'] text-xs text-yellow-500 mt-2">
+                      Install MetaMask or Coinbase Wallet to play
                     </p>
                   </div>
                 </div>
@@ -166,14 +146,18 @@ export default function LandingPage() {
                 <div className="space-y-4">
                   <div className="pixel-border p-6 bg-black/70 text-center">
                     <div className="font-['VT323'] text-xl text-primary mb-2">WALLET DETECTED</div>
-                    <div className="font-['Space_Mono'] text-sm text-muted-foreground mb-4">
+                    <div className="font-['Space_Mono'] text-sm text-muted-foreground mb-1">
                       {connectedAddress.slice(0, 6)}...{connectedAddress.slice(-4)}
+                    </div>
+                    <div className="font-['Space_Mono'] text-xs text-accent mb-4">
+                      Network: {chainName?.toUpperCase() || 'UNKNOWN'}
                     </div>
                     
                     {challenge && !isAuthenticating && (
                       <button
                         onClick={handleSignAndAuthenticate}
                         className="pixel-btn w-full"
+                        data-testid="sign-button"
                       >
                         🎮 SIGN & ENTER ARCADE
                       </button>
@@ -184,10 +168,6 @@ export default function LandingPage() {
                         AUTHENTICATING...
                       </div>
                     )}
-                  </div>
-
-                  <div className="flex justify-center">
-                    <ConnectButton />
                   </div>
                 </div>
               )}
@@ -211,14 +191,14 @@ export default function LandingPage() {
             {/* Footer */}
             <div className="text-center pt-8 border-t-2 border-border">
               <p className="font-['Space_Mono'] text-xs text-muted-foreground">
-                © 2026 SOCIALFI ARCADE • POWERED BY BONDING CURVES • NO RUGS
+                © 2026 SOCIALFI ARCADE • POWERED BY BONDING CURVES • POLYGON READY
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         @keyframes grid-move {
           0% { transform: translateY(0); }
           100% { transform: translateY(50px); }
