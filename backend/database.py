@@ -1,21 +1,15 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, DateTime, ForeignKey, CheckConstraint, UniqueConstraint, Index
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timezone
 import os
 
-DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://infofi:infofi123@localhost:5432/infofi_db')
+MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+DB_NAME = os.environ.get('DB_NAME', 'infofi_db')
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+client = AsyncIOMotorClient(MONGO_URL)
+db = client[DB_NAME]
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def get_db():
+    return db
 
 class User(Base):
     __tablename__ = 'users'
