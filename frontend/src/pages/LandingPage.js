@@ -6,7 +6,7 @@ import { toast, Toaster } from 'sonner';
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, connectedAddress, provider, chainName, connectWallet, authenticate } = useAuth();
+  const { isAuthenticated, connectedAddress, web3, chainName, connectWallet, authenticate } = useAuth();
   
   const [challenge, setChallenge] = useState(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
