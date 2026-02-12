@@ -46,12 +46,11 @@ export default function LandingPage() {
   };
 
   const handleSignAndAuthenticate = async () => {
-    if (!challenge || isAuthenticating || !provider) return;
+    if (!challenge || isAuthenticating || !web3) return;
     
     setIsAuthenticating(true);
     try {
-      const signer = await provider.getSigner();
-      const signature = await signer.signMessage(challenge);
+      const signature = await web3.eth.personal.sign(challenge, connectedAddress, '');
 
       if (signature) {
         await authenticate(signature, challenge);
