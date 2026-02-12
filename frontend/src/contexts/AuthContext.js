@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { BrowserProvider } from 'ethers';
+import Web3 from 'web3';
 import axios from 'axios';
 
 const AuthContext = createContext();
@@ -13,7 +13,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [connectedAddress, setConnectedAddress] = useState(null);
-  const [provider, setProvider] = useState(null);
+  const [web3, setWeb3] = useState(null);
   const [chainName, setChainName] = useState(null);
 
   useEffect(() => {
@@ -36,24 +36,29 @@ export function AuthProvider({ children }) {
 
   const connectWallet = async () => {
     if (!window.ethereum) {
-      alert('Please install MetaMask or another Web3 wallet');
+      alert('Please install MetaMask!');
       return;
     }
 
     try {
-      const provider = new BrowserProvider(window.ethereum);
-      const accounts = await provider.send('eth_requestAccounts', []);
-      const network = await provider.getNetwork();
+      const web3Instance = new Web3(window.ethereum);
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
       
-      const chainId = Number(network.chainId);
+      const accounts = await web3Instance.eth.getAccounts();
+      const chainId = await web3Instance.eth.getChainId();
+      
       const chainNames = {
         1: 'ethereum',
+        1n: 'ethereum',
         8453: 'base',
+        8453n: 'base',
         137: 'polygon',
-        56: 'bnb'
+        137n: 'polygon',
+        56: 'bnb',
+        56n: 'bnb'
       };
       
-      setProvider(provider);
+      setWeb3(web3Instance);
       setConnectedAddress(accounts[0]);
       setChainName(chainNames[chainId] || 'ethereum');
       
@@ -92,7 +97,7 @@ export function AuthProvider({ children }) {
     setUser(null);
     setIsAuthenticated(false);
     setConnectedAddress(null);
-    setProvider(null);
+    setWeb3(null);
   };
 
   const refreshUser = async () => {
@@ -107,7 +112,7 @@ export function AuthProvider({ children }) {
     loading,
     isAuthenticated,
     connectedAddress,
-    provider,
+    web3,
     chainName,
     connectWallet,
     authenticate,
@@ -115,5 +120,5 @@ export function AuthProvider({ children }) {
     refreshUser
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;\
 }
