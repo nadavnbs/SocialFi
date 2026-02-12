@@ -31,6 +31,13 @@
     "@radix-ui/react-toggle": "^1.1.6",
     "@radix-ui/react-toggle-group": "^1.1.7",
     "@radix-ui/react-tooltip": "^1.2.4",
+    "@rainbow-me/rainbowkit": "^2.2.10",
+    "@solana/wallet-adapter-base": "^0.9.27",
+    "@solana/wallet-adapter-react": "^0.15.39",
+    "@solana/wallet-adapter-react-ui": "^0.9.39",
+    "@solana/wallet-adapter-wallets": "^0.19.37",
+    "@solana/web3.js": "^1.98.4",
+    "@tanstack/react-query": "^5.90.21",
     "axios": "^1.13.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -54,6 +61,8 @@
     "tailwind-merge": "^3.2.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
+    "viem": "^2.45.3",
+    "wagmi": "^3.4.3",
     "zod": "^3.24.4"
   },
   "scripts": {
