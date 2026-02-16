@@ -503,7 +503,7 @@ async def buy_shares(
         )
     else:
         await db.positions.insert_one({
-            "user_id": user_id,
+            "wallet_address": wallet_address.lower(),
             "market_id": trade.market_id,
             "shares": trade.shares,
             "avg_price": cost_calc["avg_price"],
@@ -512,7 +512,7 @@ async def buy_shares(
     
     # Record trade
     await db.trades.insert_one({
-        "user_id": user_id,
+        "wallet_address": wallet_address.lower(),
         "market_id": trade.market_id,
         "trade_type": "buy",
         "shares": trade.shares,
@@ -536,11 +536,11 @@ async def buy_shares(
 @api_router.post("/trades/sell")
 async def sell_shares(
     trade: TradeRequest,
-    user_id: str = Depends(get_current_user_optional),
+    wallet_address: str = Depends(get_current_user_optional),
     db=Depends(get_db)
 ):
     """Sell shares in a post's market"""
-    if not user_id:
+    if not wallet_address:
         raise HTTPException(status_code=401, detail="Authentication required")
     
     market = await db.markets.find_one({"_id": ObjectId(trade.market_id)})
@@ -550,7 +550,7 @@ async def sell_shares(
         raise HTTPException(status_code=400, detail="Market is frozen")
     
     position = await db.positions.find_one({
-        "user_id": user_id,
+        "wallet_address": wallet_address.lower(),
         "market_id": trade.market_id
     })
     
@@ -578,10 +578,10 @@ async def sell_shares(
     )
     
     # Update user balance
-    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    user = await db.users.find_one({"wallet_address": wallet_address.lower()})
     new_balance = user["balance_credits"] + revenue_calc["net_revenue"]
     await db.users.update_one(
-        {"_id": ObjectId(user_id)},
+        {"wallet_address": wallet_address.lower()},
         {
             "$set": {"balance_credits": new_balance},
             "$inc": {"xp": 10}
