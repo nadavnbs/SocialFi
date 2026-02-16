@@ -1,45 +1,103 @@
-# SocialFi Multi-Network Ingestion Platform
+# SocialFi Multi-Network Platform
 
 ## Product Requirements Document
 
-### Original Problem Statement
-Build a SocialFi platform where content from multiple social networks (Reddit, Farcaster, X, Instagram, Twitch) is ingested, normalized, and turned into tradable markets. Users can browse, filter, and trade shares in viral posts using a bonding curve AMM.
+### Overview
+SocialFi is a multi-network content ingestion and trading platform where viral posts become tradable markets. Users authenticate via Web3 wallet (SIWE/EIP-4361), browse aggregated content from Reddit, Farcaster, X, Instagram, and Twitch, and trade shares using a bonding curve AMM.
 
-### User Personas
-1. **Crypto Traders** - Want to speculate on viral content
-2. **Content Curators** - Find and list trending posts to earn rewards
-3. **Social Media Power Users** - Track engagement across platforms
+---
 
-### Core Requirements
-- ✅ Multi-network content ingestion (Reddit, Farcaster working; X/Instagram/Twitch stubbed)
-- ✅ Wallet-based authentication (MetaMask, Coinbase Wallet)
+## Production-Ready Status ✅
+
+### Completed (December 2025)
+
+**Core Features**
+- ✅ Wallet-based authentication (SIWE for EVM, structured messages for Solana)
+- ✅ Multi-network content ingestion (Reddit, Farcaster active; X/Instagram/Twitch stubbed)
 - ✅ Network filtering (multi-select)
 - ✅ Sorting (trending, new, price, volume)
-- ✅ Paste URL to list any post as a market
-- ✅ Buy/Sell shares with bonding curve pricing
+- ✅ Paste URL to list posts as markets
+- ✅ Buy/sell shares with bonding curve AMM
 - ✅ Portfolio tracking with P&L
-- ✅ Leaderboard by XP, reputation, balance
-- ✅ 1,000 credits for new users
+- ✅ Leaderboard by XP/reputation/balance
+- ✅ 1,000 credits for new wallets
 
-### Architecture
+**Security Hardening**
+- ✅ SIWE (EIP-4361) authentication with nonce replay protection
+- ✅ JWT secret validation (rejects weak/default in production)
+- ✅ CORS validation (no wildcards with credentials in production)
+- ✅ Rate limiting on auth, trades, and feed endpoints
+- ✅ Security headers middleware (HSTS, X-Frame-Options, etc.)
+- ✅ Input validation with Pydantic models
+- ✅ No sensitive data in logs
+
+**Concurrency Safety**
+- ✅ Optimistic locking on market updates (version field)
+- ✅ Atomic balance/position updates with conditional checks
+- ✅ Idempotency keys for trade requests
+- ✅ Invariant checks (no negative supply/balance/shares)
+
+**Performance**
+- ✅ MongoDB aggregation pipeline for feed (eliminates N+1)
+- ✅ Proper database indexes for all query patterns
+- ✅ TTL indexes for challenge cleanup
+
+**DevOps**
+- ✅ Docker Compose with MongoDB + Redis
+- ✅ Production Dockerfiles (non-root, health checks)
+- ✅ GitHub Actions CI/CD pipeline
+- ✅ Deployment documentation
+
+---
+
+## Architecture
 
 ```
-Frontend (React)          Backend (FastAPI)         Database (MongoDB)
-├── LandingPage.js   -->  /api/auth/challenge  --> users
-├── Feed.js          -->  /api/auth/verify     --> challenges  
-├── Portfolio.js     -->  /api/feed            --> unified_posts
-├── Leaderboard.js   -->  /api/posts/paste-url --> markets
-└── AuthContext.js   -->  /api/trades/buy|sell --> positions, trades
-                     -->  /api/portfolio
-                     -->  /api/leaderboard
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Frontend      │────▶│   Backend       │────▶│   MongoDB       │
+│   (React)       │     │   (FastAPI)     │     │   (Primary DB)  │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                               │
+                               ▼
+                        ┌─────────────────┐
+                        │   Redis         │
+                        │   (Cache/Queue) │
+                        └─────────────────┘
 ```
 
-### Data Models
+### Key Files
+- `/app/backend/server.py` - Main API endpoints
+- `/app/backend/siwe.py` - SIWE authentication
+- `/app/backend/security.py` - Security config validation
+- `/app/backend/amm.py` - Bonding curve AMM
+- `/app/backend/connectors.py` - Network connectors
+- `/app/frontend/src/pages/LandingPage.js` - Wallet connect UI
+- `/app/frontend/src/pages/Feed.js` - Main feed with trading
 
-**User**
+### API Endpoints
+| Endpoint | Method | Auth | Rate Limit | Description |
+|----------|--------|------|------------|-------------|
+| `/api/health` | GET | No | - | Health check |
+| `/api/auth/challenge` | POST | No | 10/min | Get SIWE challenge |
+| `/api/auth/verify` | POST | No | 5/min | Verify signature |
+| `/api/auth/me` | GET | Yes | 30/min | Get current user |
+| `/api/feed` | GET | No | 60/min | Get posts with filters |
+| `/api/feed/refresh` | POST | No | 5/min | Trigger refresh |
+| `/api/posts/paste-url` | POST | Yes | 10/min | List post by URL |
+| `/api/trades/buy` | POST | Yes | 30/min | Buy shares |
+| `/api/trades/sell` | POST | Yes | 30/min | Sell shares |
+| `/api/portfolio` | GET | Yes | 30/min | Get positions |
+| `/api/leaderboard` | GET | No | 30/min | Get rankings |
+
+---
+
+## Database Schema (MongoDB)
+
+**users**
 ```json
 {
   "wallet_address": "0x...",
+  "chain_type": "ethereum",
   "balance_credits": 1000.0,
   "level": 1,
   "xp": 0,
@@ -47,99 +105,84 @@ Frontend (React)          Backend (FastAPI)         Database (MongoDB)
 }
 ```
 
-**Unified Post**
+**unified_posts**
 ```json
 {
-  "source_network": "reddit|farcaster|x|instagram|twitch",
-  "source_id": "original_post_id",
+  "source_network": "reddit",
+  "source_id": "abc123",
   "source_url": "https://...",
   "author_username": "...",
   "title": "...",
   "content_text": "...",
-  "media_urls": [],
   "source_likes": 1000,
-  "source_comments": 50,
   "status": "active"
 }
 ```
 
-**Market**
+**markets**
 ```json
 {
   "post_id": "...",
   "total_supply": 100.0,
   "price_current": 1.0,
-  "total_volume": 0.0
+  "total_volume": 0.0,
+  "version": 0
 }
 ```
 
-### API Endpoints
-- `POST /api/auth/challenge` - Get challenge to sign
-- `POST /api/auth/verify` - Verify signature, get JWT
-- `GET /api/auth/me` - Get current user
-- `GET /api/feed` - Get posts with filters
-- `POST /api/feed/refresh` - Trigger background refresh
-- `GET /api/feed/networks` - Get available networks
-- `POST /api/posts/paste-url` - List post by URL
-- `POST /api/trades/buy` - Buy shares
-- `POST /api/trades/sell` - Sell shares
-- `GET /api/portfolio` - Get user positions
-- `GET /api/leaderboard` - Get ranked users
-
 ---
 
-## What's Been Implemented (December 2025)
+## Test Results
 
-### Backend
-- FastAPI server with MongoDB
-- Wallet-based JWT authentication
-- Content connectors for Reddit & Farcaster (public APIs)
-- Stub connectors for X, Instagram, Twitch
-- Paste URL fallback for any supported network
-- Bonding curve AMM for trading
-- Portfolio tracking with P&L calculation
+```
+Backend Unit Tests: 39/39 passed
+- AMM calculations: 19 tests
+- SIWE authentication: 14 tests  
+- Security config: 6 tests
 
-### Frontend
-- React with Tailwind CSS
-- Wallet connect landing page
-- Multi-network feed with filters
-- Trade modal for buy/sell
-- Paste URL modal
-- Portfolio page
-- Leaderboard page
-
-### Database
-- MongoDB with proper indexes
-- 10 sample posts seeded
-- Wallet-based user schema
-
----
-
-## Known Limitations
-- Reddit/Farcaster APIs blocked from server (403) - relies on paste URL
-- Wallet auth requires MetaMask browser extension
-- react-router-dom v5 (not v6) due to Web3 library compatibility
+API Integration: All endpoints verified
+- Health, Feed, Networks, Challenge, Leaderboard
+- Protected endpoints return 401 without auth
+```
 
 ---
 
 ## Prioritized Backlog
 
-### P0 - Critical
-- None (MVP complete)
+### P0 - None (MVP Complete)
 
 ### P1 - High Priority
-- Implement OAuth for X/Instagram when API keys available
-- Add server-side proxy for Reddit API
-- Implement WebSocket for real-time price updates
+- Implement Redis caching for feed
+- Add Celery/RQ for background job queue
+- Implement WebSocket for real-time prices
 
 ### P2 - Medium Priority
+- OAuth for X/Instagram when API keys available
 - Price history charts
 - Moderation panel
-- Anti-spam heuristics
-- Share/embed post markets
+- Share/embed functionality
 
 ### P3 - Low Priority
 - Mobile responsive improvements
-- Dark/light theme toggle
 - Notification system
-- Social login (Google OAuth)
+- Advanced analytics
+
+---
+
+## Deployment
+
+See `/app/DEPLOY.md` for full deployment guide.
+
+**Quick Start:**
+```bash
+cp .env.example .env
+# Edit .env with secure values
+docker compose up -d
+```
+
+**Production Checklist:**
+- [ ] ENV=production
+- [ ] Strong JWT_SECRET (32+ chars)
+- [ ] Strong MONGO_ROOT_PASSWORD
+- [ ] Explicit CORS_ORIGINS (no wildcards)
+- [ ] HTTPS configured on reverse proxy
