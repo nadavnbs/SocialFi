@@ -1,7 +1,6 @@
 """
 Tests for SIWE (Sign-In with Ethereum) implementation.
 """
-import pytest
 from datetime import datetime, timezone, timedelta
 from siwe import (
     SIWEMessage,

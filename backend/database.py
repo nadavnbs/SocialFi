@@ -2,7 +2,6 @@
 MongoDB database connection and initialization.
 """
 from motor.motor_asyncio import AsyncIOMotorClient
-from datetime import datetime, timezone
 import os
 from pathlib import Path
 from dotenv import load_dotenv

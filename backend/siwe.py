@@ -6,7 +6,6 @@ import re
 import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple
-from urllib.parse import urlparse
 import logging
 
 logger = logging.getLogger(__name__)

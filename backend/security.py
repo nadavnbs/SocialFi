@@ -5,8 +5,6 @@ Enforces security requirements at application boot.
 import os
 import secrets
 import logging
-from typing import Optional
-from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 

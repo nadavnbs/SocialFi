@@ -57,7 +57,7 @@ def decode_token(token: str) -> str:
         
         return wallet_address
         
-    except JWTError as e:
+    except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Invalid or expired token'

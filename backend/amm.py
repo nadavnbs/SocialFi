@@ -1,4 +1,3 @@
-import math
 
 BASE_PRICE = 0.01
 EXPONENT = 1.5

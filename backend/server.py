@@ -2,15 +2,13 @@
 Main FastAPI server for SocialFi Multi-Network Ingestion Platform.
 Production-ready with security hardening, rate limiting, and atomic operations.
 """
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, Query, BackgroundTasks, Request
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Optional
-from datetime import datetime, timezone, timedelta
-import os
+from typing import Optional
+from datetime import datetime, timezone
 import logging
-import re
 import uuid
 from pathlib import Path
 from urllib.parse import urlparse
@@ -22,7 +20,7 @@ from database import get_db, init_db
 from models import NetworkSource, PostStatus, UnifiedPost, PasteURLRequest
 from connectors import connector_registry
 from amm import calculate_buy_cost, calculate_sell_revenue, distribute_fees, get_price
-from auth import create_access_token, get_current_user_optional, get_current_user
+from auth import create_access_token, get_current_user
 from signature_verification import SignatureVerifier
 from siwe import create_auth_message, validate_siwe_fields
 from security import get_security_config

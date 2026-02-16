@@ -20,7 +20,7 @@ if not admin:
     )
     db.add(admin)
     db.commit()
-    print(f"Created admin user: admin@infofi.com / admin123")
+    print("Created admin user: admin@infofi.com / admin123")
 else:
     print("Admin user already exists")
 

@@ -53,7 +53,7 @@ response = requests.post(f'{API_URL}/auth/verify', json={
 
 if response.status_code == 200:
     data = response.json()
-    print(f"✅ SUCCESS! Authentication complete!")
+    print("✅ SUCCESS! Authentication complete!")
     print(f"Token: {data['access_token'][:50]}...")
     print(f"User balance: {data['user']['balance_credits']} credits")
 else:

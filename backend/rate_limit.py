@@ -2,7 +2,7 @@
 Rate limiting configuration and middleware.
 Uses slowapi for request rate limiting.
 """
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from starlette.requests import Request
