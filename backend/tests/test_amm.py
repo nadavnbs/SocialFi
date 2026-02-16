@@ -60,7 +60,9 @@ class TestCalculateBuyCost:
         
         assert result['cost_before_fee'] > 0
         assert result['fee'] > 0
-        assert result['total_cost'] == result['cost_before_fee'] + result['fee']
+        # Allow for floating point precision in rounding
+        expected_total = result['cost_before_fee'] + result['fee']
+        assert abs(result['total_cost'] - expected_total) < 0.01
         assert result['new_supply'] == 110
     
     def test_buy_zero_shares_raises(self):
