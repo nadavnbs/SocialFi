@@ -19,7 +19,7 @@ from bson.errors import InvalidId
 from database import get_db, init_db
 from models import NetworkSource, PostStatus, UnifiedPost, PasteURLRequest
 from connectors import connector_registry
-from amm import calculate_buy_cost, calculate_sell_revenue, distribute_fees, get_price
+from amm import calculate_buy_cost, calculate_sell_revenue, get_price
 from auth import create_access_token, get_current_user
 from signature_verification import SignatureVerifier
 from siwe import create_auth_message, validate_siwe_fields
