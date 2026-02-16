@@ -79,6 +79,11 @@ async def get_challenge(request: WalletChallengeRequest, db=Depends(get_db)):
 
 @api_router.post("/auth/verify")
 async def verify_signature(request: SignatureVerifyRequest, db=Depends(get_db)):
+    logger.info(f"Verify request received for wallet: {request.wallet_address}")
+    logger.info(f"Chain type: {request.chain_type}")
+    logger.info(f"Challenge: {request.challenge[:50]}...")
+    logger.info(f"Signature: {request.signature[:50]}...")
+    
     challenge_doc = await db.challenges.find_one({
         "wallet_address": request.wallet_address.lower(),
         "challenge": request.challenge,
@@ -87,6 +92,7 @@ async def verify_signature(request: SignatureVerifyRequest, db=Depends(get_db)):
     })
     
     if not challenge_doc:
+        logger.error("Challenge not found or expired")
         raise HTTPException(status_code=401, detail="Challenge expired or already used")
     
     verifier = SignatureVerifier()
@@ -98,6 +104,7 @@ async def verify_signature(request: SignatureVerifyRequest, db=Depends(get_db)):
     )
     
     if not is_valid:
+        logger.error("Signature verification failed")
         raise HTTPException(status_code=401, detail="Invalid signature")
     
     await db.challenges.update_one(
