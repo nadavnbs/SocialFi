@@ -19,6 +19,7 @@ signature = signed.signature.hex()
 print(f"Signature: {signature}")
 
 # Verify
-recovered = Web3.eth.account.recover_message(message_hash, signature=signature)
+from web3.auto import w3
+recovered = w3.eth.account.recover_message(message_hash, signature=signature)
 print(f"Recovered address: {recovered}")
 print(f"Match: {recovered.lower() == address.lower()}")
