@@ -50,10 +50,15 @@ export default function LandingPage() {
     
     setIsAuthenticating(true);
     try {
-      // Convert message to hex for MetaMask
-      const hexMessage = '0x' + Buffer.from(challenge, 'utf8').toString('hex');
+      // Convert message to hex for MetaMask personal_sign
+      const encoder = new TextEncoder();
+      const messageBytes = encoder.encode(challenge);
+      const hexMessage = '0x' + Array.from(messageBytes).map(b => b.toString(16).padStart(2, '0')).join('');
       
-      // Use window.ethereum.request for better compatibility
+      console.log('Signing message:', challenge);
+      console.log('Hex message:', hexMessage);
+      
+      // Use window.ethereum.request for MetaMask compatibility
       const signature = await window.ethereum.request({
         method: 'personal_sign',
         params: [hexMessage, connectedAddress],
