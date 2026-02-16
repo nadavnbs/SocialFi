@@ -400,13 +400,13 @@ async def get_feed(
                 "ingested_at": 1,
                 "market": {
                     "$cond": {
-                        "if": {"$ifNull": ["$market_data._id", false]},
+                        "if": {"$ifNull": ["$market_data._id", False]},
                         "then": {
                             "id": {"$toString": "$market_data._id"},
                             "price_current": "$market_data.price_current",
                             "total_supply": "$market_data.total_supply",
                             "total_volume": "$market_data.total_volume",
-                            "is_frozen": {"$ifNull": ["$market_data.is_frozen", false]}
+                            "is_frozen": {"$ifNull": ["$market_data.is_frozen", False]}
                         },
                         "else": "$$REMOVE"
                     }
