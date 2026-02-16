@@ -46,11 +46,15 @@ export default function LandingPage() {
   };
 
   const handleSignAndAuthenticate = async () => {
-    if (!challenge || isAuthenticating || !web3) return;
+    if (!challenge || isAuthenticating || !connectedAddress) return;
     
     setIsAuthenticating(true);
     try {
-      const signature = await web3.eth.personal.sign(challenge, connectedAddress, '');
+      // Use window.ethereum.request for better compatibility with MetaMask
+      const signature = await window.ethereum.request({
+        method: 'personal_sign',
+        params: [challenge, connectedAddress],
+      });
 
       if (signature) {
         await authenticate(signature, challenge);
@@ -58,7 +62,8 @@ export default function LandingPage() {
         history.push('/feed');
       }
     } catch (error) {
-      toast.error('Authentication failed');
+      console.error('Sign error:', error);
+      toast.error('Authentication failed: ' + (error.message || 'Please try again'));
       setChallenge(null);
     } finally {
       setIsAuthenticating(false);
