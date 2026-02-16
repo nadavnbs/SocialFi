@@ -216,24 +216,28 @@ async def create_post(
 
 @api_router.get("/posts")
 async def list_posts(sort: str = 'volume', limit: int = 50, db=Depends(get_db)):
-    pipeline = [
-        {"$match": {"status": "active"}},
-        {"$lookup": {
-            "from": "markets",
-            "localField": "_id",
-            "foreignField": "post_id",
-            "as": "market"
-        }},
-        {"$unwind": "$market"},
-        {"$sort": {"market.total_volume": -1 if sort == 'volume' else 1}},
-        {"$limit": limit}
-    ]
-    
     posts = []
-    async for post in db.posts.aggregate(pipeline):
-        post["_id"] = str(post["_id"])
-        post["market"]["_id"] = str(post["market"]["_id"])
-        posts.append(post)
+    
+    # Get all active posts
+    async for post in db.posts.find({"status": "active"}).limit(limit):
+        post_id = str(post["_id"])
+        
+        # Get market for this post
+        market = await db.markets.find_one({"post_id": post_id})
+        
+        if market:
+            post["_id"] = post_id
+            post["market"] = market
+            post["market"]["_id"] = str(market["_id"])
+            posts.append(post)
+    
+    # Sort posts
+    if sort == 'volume':
+        posts.sort(key=lambda x: x.get("market", {}).get("total_volume", 0), reverse=True)
+    elif sort == 'price':
+        posts.sort(key=lambda x: x.get("market", {}).get("price_current", 0), reverse=True)
+    else:  # new
+        posts.sort(key=lambda x: x.get("created_at", datetime.min), reverse=True)
     
     return posts
 
