@@ -13,9 +13,9 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/feed');
+      history.push('/feed');
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, history]);
 
   useEffect(() => {
     if (connectedAddress && !isAuthenticated) {
