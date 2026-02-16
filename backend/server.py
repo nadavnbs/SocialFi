@@ -662,7 +662,6 @@ async def buy_shares(
             detail=f"Insufficient balance. Need {cost_calc['total_cost']:.2f}, have {user['balance_credits']:.2f}"
         )
     
-    fees = distribute_fees(cost_calc["fee"])
     current_version = market.get("version", 0)
     new_balance = user["balance_credits"] - cost_calc["total_cost"]
     
