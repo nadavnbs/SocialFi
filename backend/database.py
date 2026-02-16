@@ -16,19 +16,8 @@ async def get_db():
 async def init_db():
     """Create indexes for performance - handles migration from old schema"""
     try:
-        # Clean up old wallet-based users that don't have email
-        await db.users.delete_many({"email": {"$exists": False}})
-        await db.users.delete_many({"email": None})
-        
-        # Drop old indexes that might conflict
-        try:
-            await db.users.drop_index("wallet_address_1")
-        except:
-            pass
-        
-        # User indexes
-        await db.users.create_index("email", unique=True, sparse=True)
-        await db.users.create_index("username", unique=True, sparse=True)
+        # User indexes - wallet based
+        await db.users.create_index("wallet_address", unique=True, sparse=True)
         await db.users.create_index("created_at")
         
         # Unified posts indexes
@@ -44,15 +33,19 @@ async def init_db():
         await db.markets.create_index("total_volume")
         await db.markets.create_index("price_current")
         
-        # Position indexes
-        await db.positions.create_index([("user_id", 1), ("market_id", 1)], unique=True)
-        await db.positions.create_index("user_id")
+        # Position indexes - wallet based
+        await db.positions.create_index([("wallet_address", 1), ("market_id", 1)], unique=True)
+        await db.positions.create_index("wallet_address")
         
         # Trade indexes
         await db.trades.create_index("market_id")
-        await db.trades.create_index("user_id")
+        await db.trades.create_index("wallet_address")
         await db.trades.create_index("created_at")
         
-        print("✅ Database indexes created for multi-network ingestion")
+        # Challenge indexes for wallet auth
+        await db.challenges.create_index("wallet_address")
+        await db.challenges.create_index("expires_at", expireAfterSeconds=0)
+        
+        print("✅ Database indexes created for wallet-based multi-network platform")
     except Exception as e:
         print(f"⚠️ Index creation warning (may be OK): {e}")
