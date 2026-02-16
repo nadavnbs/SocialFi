@@ -50,18 +50,14 @@ export default function LandingPage() {
     
     setIsAuthenticating(true);
     try {
-      // Convert message to hex for MetaMask personal_sign
-      const encoder = new TextEncoder();
-      const messageBytes = encoder.encode(challenge);
-      const hexMessage = '0x' + Array.from(messageBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      console.log('Challenge to sign:', challenge);
+      console.log('Wallet address:', connectedAddress);
       
-      console.log('Signing message:', challenge);
-      console.log('Hex message:', hexMessage);
-      
-      // Use window.ethereum.request for MetaMask compatibility
+      // MetaMask's personal_sign expects UTF-8 string message
+      // The message will be automatically prefixed with "\x19Ethereum Signed Message:\n" + len(message)
       const signature = await window.ethereum.request({
         method: 'personal_sign',
-        params: [hexMessage, connectedAddress],
+        params: [challenge, connectedAddress],
       });
 
       console.log('Signature generated:', signature);
