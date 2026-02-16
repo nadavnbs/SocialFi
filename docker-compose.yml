@@ -1,52 +1,100 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:15
-    container_name: infofi_postgres
+  mongodb:
+    image: mongo:7.0
+    container_name: socialfi_mongodb
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: infofi
-      POSTGRES_PASSWORD: infofi123
-      POSTGRES_DB: infofi_db
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-socialfi}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}
+      MONGO_INITDB_DATABASE: ${DB_NAME:-socialfi_db}
     ports:
-      - "5432:5432"
+      - "27017:27017"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mongodb_data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U infofi"]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
+    networks:
+      - socialfi_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: socialfi_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - socialfi_network
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: infofi_backend
+    container_name: socialfi_backend
+    restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://infofi:infofi123@postgres:5432/infofi_db
-      CORS_ORIGINS: http://localhost:3000
-      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      ENV: ${ENV:-production}
+      MONGO_URL: mongodb://${MONGO_ROOT_USER:-socialfi}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${DB_NAME:-socialfi_db}?authSource=admin
+      DB_NAME: ${DB_NAME:-socialfi_db}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_ALGORITHM: HS256
-      JWT_EXPIRATION: 3600
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-1440}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
     ports:
       - "8001:8001"
     depends_on:
-      postgres:
+      mongodb:
         condition: service_healthy
-    command: uvicorn server:app --host 0.0.0.0 --port 8001 --reload
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - socialfi_network
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: infofi_frontend
-    environment:
-      REACT_APP_BACKEND_URL: http://localhost:8001
+      args:
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-http://localhost:8001}
+    container_name: socialfi_frontend
+    restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3000:80"
     depends_on:
       - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - socialfi_network
 
 volumes:
-  postgres_data:
+  mongodb_data:
+  redis_data:
+
+networks:
+  socialfi_network:
+    driver: bridge
