@@ -147,7 +147,7 @@ export default function Leaderboard() {
                 <div 
                   key={index} 
                   className={`p-4 flex items-center gap-4 hover:bg-zinc-800/50 transition-colors ${
-                    entry.username === user?.username ? 'bg-emerald-500/5 border-l-2 border-emerald-500' : ''
+                    entry.wallet_address?.includes(user?.wallet_address?.slice(0, 10)) ? 'bg-emerald-500/5 border-l-2 border-emerald-500' : ''
                   }`}
                 >
                   <div className="w-12 flex justify-center">
@@ -155,13 +155,13 @@ export default function Leaderboard() {
                   </div>
                   
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-black font-bold">
-                    {entry.username?.[0]?.toUpperCase() || '?'}
+                    {entry.wallet_address?.[2]?.toUpperCase() || '?'}
                   </div>
                   
                   <div className="flex-1">
-                    <div className="font-medium text-white">
-                      {entry.username}
-                      {entry.username === user?.username && (
+                    <div className="font-medium text-white font-mono">
+                      {entry.wallet_address}
+                      {user?.wallet_address && entry.wallet_address?.includes(user.wallet_address.slice(0, 10)) && (
                         <span className="ml-2 text-xs text-emerald-400">(You)</span>
                       )}
                     </div>
