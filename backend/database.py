@@ -8,20 +8,38 @@ DB_NAME = os.environ.get('DB_NAME', 'infofi_db')
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
+
 async def get_db():
     return db
 
+
 async def init_db():
     """Create indexes for performance"""
-    await db.users.create_index("wallet_address", unique=True)
+    # User indexes
+    await db.users.create_index("email", unique=True)
+    await db.users.create_index("username", unique=True)
     await db.users.create_index("created_at")
-    await db.posts.create_index("user_wallet")
-    await db.posts.create_index("created_at")
+    
+    # Unified posts indexes
+    await db.unified_posts.create_index([("source_network", 1), ("source_id", 1)], unique=True)
+    await db.unified_posts.create_index("source_network")
+    await db.unified_posts.create_index("status")
+    await db.unified_posts.create_index("ingested_at")
+    await db.unified_posts.create_index("source_likes")
+    await db.unified_posts.create_index("source_url")
+    
+    # Market indexes
     await db.markets.create_index("post_id", unique=True)
     await db.markets.create_index("total_volume")
+    await db.markets.create_index("price_current")
+    
+    # Position indexes
+    await db.positions.create_index([("user_id", 1), ("market_id", 1)], unique=True)
+    await db.positions.create_index("user_id")
+    
+    # Trade indexes
     await db.trades.create_index("market_id")
-    await db.trades.create_index("user_wallet")
-    await db.balances.create_index([("user_wallet", 1), ("market_id", 1)], unique=True)
-    await db.challenges.create_index("wallet_address")
-    await db.challenges.create_index("expires_at", expireAfterSeconds=0)
-    print("✅ Database indexes created")
+    await db.trades.create_index("user_id")
+    await db.trades.create_index("created_at")
+    
+    print("✅ Database indexes created for multi-network ingestion")
