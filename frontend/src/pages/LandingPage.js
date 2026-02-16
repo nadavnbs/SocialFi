@@ -50,11 +50,16 @@ export default function LandingPage() {
     
     setIsAuthenticating(true);
     try {
-      // Use window.ethereum.request for better compatibility with MetaMask
+      // Convert message to hex for MetaMask
+      const hexMessage = '0x' + Buffer.from(challenge, 'utf8').toString('hex');
+      
+      // Use window.ethereum.request for better compatibility
       const signature = await window.ethereum.request({
         method: 'personal_sign',
-        params: [challenge, connectedAddress],
+        params: [hexMessage, connectedAddress],
       });
+
+      console.log('Signature generated:', signature);
 
       if (signature) {
         await authenticate(signature, challenge);
