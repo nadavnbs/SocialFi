@@ -1,13 +1,13 @@
 import React from 'react';
+import { useHistory } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
 
 export default function Feed() {
   const { user, isAuthenticated } = useAuth();
-  const navigate = useNavigate();
+  const history = useHistory();
 
   if (!isAuthenticated) {
-    navigate('/');
+    history.push('/');
     return null;
   }
 
