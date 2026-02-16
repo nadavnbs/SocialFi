@@ -600,7 +600,7 @@ async def sell_shares(
     
     # Record trade
     await db.trades.insert_one({
-        "user_id": user_id,
+        "wallet_address": wallet_address.lower(),
         "market_id": trade.market_id,
         "trade_type": "sell",
         "shares": trade.shares,
@@ -625,17 +625,17 @@ async def sell_shares(
 
 @api_router.get("/portfolio")
 async def get_portfolio(
-    user_id: str = Depends(get_current_user_optional),
+    wallet_address: str = Depends(get_current_user_optional),
     db=Depends(get_db)
 ):
     """Get user's portfolio with all positions"""
-    if not user_id:
+    if not wallet_address:
         raise HTTPException(status_code=401, detail="Authentication required")
     
     positions = []
     total_value = 0.0
     
-    async for pos in db.positions.find({"user_id": user_id, "shares": {"$gt": 0}}):
+    async for pos in db.positions.find({"wallet_address": wallet_address.lower(), "shares": {"$gt": 0}}):
         market = await db.markets.find_one({"_id": ObjectId(pos["market_id"])})
         if not market:
             continue
@@ -666,7 +666,7 @@ async def get_portfolio(
         
         total_value += current_value
     
-    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    user = await db.users.find_one({"wallet_address": wallet_address.lower()})
     
     return {
         "positions": positions,
@@ -692,7 +692,7 @@ async def get_leaderboard(
     }.get(sort_by, "xp")
     
     users = []
-    cursor = db.users.find({}, {"password_hash": 0}).sort(sort_field, -1).limit(limit)
+    cursor = db.users.find({}).sort(sort_field, -1).limit(limit)
     
     rank = 1
     async for user in cursor:
