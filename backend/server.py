@@ -698,7 +698,7 @@ async def get_leaderboard(
     async for user in cursor:
         users.append({
             "rank": rank,
-            "username": user["username"],
+            "wallet_address": user.get("wallet_address", "")[:10] + "...",
             "level": user.get("level", 1),
             "xp": user.get("xp", 0),
             "reputation": round(user.get("reputation", 0), 2),
