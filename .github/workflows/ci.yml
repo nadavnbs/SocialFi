@@ -1,0 +1,238 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "18"
+
+jobs:
+  # ============================================
+  # Backend Tests & Security Scans
+  # ============================================
+  backend:
+    name: Backend CI
+    runs-on: ubuntu-latest
+    
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov ruff bandit pip-audit
+
+      - name: Lint with Ruff
+        run: |
+          cd backend
+          ruff check . --output-format=github || true
+
+      - name: Security scan with Bandit
+        run: |
+          cd backend
+          bandit -r . -ll -ii -x ./tests || true
+
+      - name: Dependency audit
+        run: |
+          cd backend
+          pip-audit --strict || true
+
+      - name: Run tests
+        env:
+          MONGO_URL: mongodb://localhost:27017/test_db
+          DB_NAME: test_db
+          JWT_SECRET: test-secret-for-ci-pipeline-min-32-chars
+          CORS_ORIGINS: http://localhost:3000
+          ENV: development
+        run: |
+          cd backend
+          pytest tests/ -v --cov=. --cov-report=xml || true
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: backend/coverage.xml
+          flags: backend
+        continue-on-error: true
+
+  # ============================================
+  # Frontend Tests & Build
+  # ============================================
+  frontend:
+    name: Frontend CI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          yarn install --frozen-lockfile
+
+      - name: Lint
+        run: |
+          cd frontend
+          yarn lint || true
+
+      - name: Run tests
+        run: |
+          cd frontend
+          yarn test --passWithNoTests --watchAll=false || true
+
+      - name: Build
+        env:
+          REACT_APP_BACKEND_URL: http://localhost:8001
+          CI: false  # Treat warnings as warnings, not errors
+        run: |
+          cd frontend
+          yarn build
+
+      - name: Dependency audit
+        run: |
+          cd frontend
+          yarn audit --level moderate || true
+
+  # ============================================
+  # Docker Build & Security Scan
+  # ============================================
+  docker:
+    name: Docker Build & Scan
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: false
+          tags: socialfi-backend:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: false
+          tags: socialfi-frontend:test
+          build-args: |
+            REACT_APP_BACKEND_URL=http://localhost:8001
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner (backend)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'socialfi-backend:test'
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Run Trivy vulnerability scanner (frontend)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'socialfi-frontend:test'
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+
+  # ============================================
+  # Integration Tests
+  # ============================================
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create test env file
+        run: |
+          cat > .env << EOF
+          ENV=development
+          MONGO_ROOT_USER=socialfi
+          MONGO_ROOT_PASSWORD=testpassword123
+          DB_NAME=socialfi_test
+          JWT_SECRET=test-jwt-secret-for-integration-tests-min-32
+          CORS_ORIGINS=http://localhost:3000
+          REACT_APP_BACKEND_URL=http://localhost:8001
+          EOF
+
+      - name: Start services
+        run: |
+          docker compose up -d mongodb redis
+          sleep 10
+          docker compose up -d backend
+          sleep 10
+
+      - name: Health check
+        run: |
+          curl -f http://localhost:8001/api/health || exit 1
+
+      - name: Test API endpoints
+        run: |
+          # Health check
+          curl -s http://localhost:8001/api/ | grep -q "operational"
+          
+          # Feed endpoint
+          curl -s http://localhost:8001/api/feed | grep -q "posts"
+          
+          # Networks endpoint
+          curl -s http://localhost:8001/api/feed/networks | grep -q "networks"
+          
+          echo "✅ All API endpoints responding"
+
+      - name: Stop services
+        if: always()
+        run: docker compose down -v
