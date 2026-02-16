@@ -41,80 +41,105 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# ============== AUTH ENDPOINTS ==============
+# ============== AUTH ENDPOINTS (WALLET-BASED) ==============
 
-@api_router.post("/auth/register")
-async def register(data: UserRegister, db=Depends(get_db)):
-    """Register new user with email/password"""
-    existing = await db.users.find_one({"email": data.email.lower()})
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
+class WalletChallengeRequest(BaseModel):
+    wallet_address: str = Field(min_length=26, max_length=200)
+    chain_type: str = Field(pattern="^(ethereum|base|polygon|bnb|solana)$")
+
+
+class SignatureVerifyRequest(BaseModel):
+    wallet_address: str
+    challenge: str
+    signature: str
+    chain_type: str
+
+
+@api_router.post("/auth/challenge")
+async def get_challenge(request: WalletChallengeRequest, db=Depends(get_db)):
+    """Get a challenge message to sign with wallet"""
+    challenge = generate_challenge()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
     
-    existing_username = await db.users.find_one({"username": data.username.lower()})
-    if existing_username:
-        raise HTTPException(status_code=400, detail="Username already taken")
-    
-    hashed_password = bcrypt.hashpw(data.password.encode(), bcrypt.gensalt())
-    
-    user = {
-        "email": data.email.lower(),
-        "username": data.username.lower(),
-        "password_hash": hashed_password.decode(),
-        "balance_credits": 1000.0,  # Starting credits
-        "level": 1,
-        "xp": 0,
-        "reputation": 0.0,
-        "is_admin": False,
+    await db.challenges.insert_one({
+        "wallet_address": request.wallet_address.lower(),
+        "chain_type": request.chain_type,
+        "challenge": challenge,
         "created_at": datetime.now(timezone.utc),
-        "last_login": datetime.now(timezone.utc)
-    }
-    
-    result = await db.users.insert_one(user)
-    user_id = str(result.inserted_id)
-    
-    access_token = create_access_token(user_id)
+        "expires_at": expires_at,
+        "used": False
+    })
     
     return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
-            "id": user_id,
-            "email": user["email"],
-            "username": user["username"],
-            "balance_credits": user["balance_credits"],
-            "level": user["level"],
-            "xp": user["xp"]
-        }
+        "challenge": challenge,
+        "message": f"Sign this message to authenticate:\n\n{challenge}",
+        "expires_at": expires_at
     }
 
 
-@api_router.post("/auth/login")
-async def login(data: UserLogin, db=Depends(get_db)):
-    """Login with email/password"""
-    user = await db.users.find_one({"email": data.email.lower()})
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+@api_router.post("/auth/verify")
+async def verify_signature(request: SignatureVerifyRequest, db=Depends(get_db)):
+    """Verify wallet signature and issue JWT"""
+    logger.info(f"Verify request for wallet: {request.wallet_address}")
     
-    if not bcrypt.checkpw(data.password.encode(), user["password_hash"].encode()):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+    challenge_doc = await db.challenges.find_one({
+        "wallet_address": request.wallet_address.lower(),
+        "challenge": request.challenge,
+        "used": False,
+        "expires_at": {"$gt": datetime.now(timezone.utc)}
+    })
     
-    # Update last login
-    await db.users.update_one(
-        {"_id": user["_id"]},
-        {"$set": {"last_login": datetime.now(timezone.utc)}}
+    if not challenge_doc:
+        raise HTTPException(status_code=401, detail="Challenge expired or already used")
+    
+    verifier = SignatureVerifier()
+    is_valid = verifier.verify_signature(
+        request.challenge,
+        request.signature,
+        request.wallet_address,
+        request.chain_type
     )
     
-    user_id = str(user["_id"])
-    access_token = create_access_token(user_id)
+    if not is_valid:
+        raise HTTPException(status_code=401, detail="Invalid signature")
+    
+    await db.challenges.update_one(
+        {"_id": challenge_doc["_id"]},
+        {"$set": {"used": True}}
+    )
+    
+    user = await db.users.find_one({"wallet_address": request.wallet_address.lower()})
+    
+    if not user:
+        user = {
+            "wallet_address": request.wallet_address.lower(),
+            "chain_type": request.chain_type,
+            "balance_credits": 1000.0,
+            "level": 1,
+            "xp": 0,
+            "reputation": 0.0,
+            "is_admin": False,
+            "created_at": datetime.now(timezone.utc),
+            "last_login": datetime.now(timezone.utc)
+        }
+        result = await db.users.insert_one(user)
+        user["_id"] = result.inserted_id
+        logger.info(f"New user created: {request.wallet_address}")
+    else:
+        await db.users.update_one(
+            {"wallet_address": request.wallet_address.lower()},
+            {"$set": {"last_login": datetime.now(timezone.utc)}}
+        )
+    
+    access_token = create_access_token(request.wallet_address.lower())
     
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "user": {
-            "id": user_id,
-            "email": user["email"],
-            "username": user["username"],
-            "balance_credits": user["balance_credits"],
+            "id": str(user["_id"]),
+            "wallet_address": request.wallet_address.lower(),
+            "balance_credits": user.get("balance_credits", 1000),
             "level": user.get("level", 1),
             "xp": user.get("xp", 0),
             "reputation": user.get("reputation", 0)
@@ -123,19 +148,18 @@ async def login(data: UserLogin, db=Depends(get_db)):
 
 
 @api_router.get("/auth/me")
-async def get_me(user_id: str = Depends(get_current_user_optional), db=Depends(get_db)):
+async def get_me(wallet_address: str = Depends(get_current_user_optional), db=Depends(get_db)):
     """Get current user profile"""
-    if not user_id:
+    if not wallet_address:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    user = await db.users.find_one({"wallet_address": wallet_address.lower()})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
     return {
         "id": str(user["_id"]),
-        "email": user["email"],
-        "username": user["username"],
+        "wallet_address": user["wallet_address"],
         "balance_credits": user["balance_credits"],
         "level": user.get("level", 1),
         "xp": user.get("xp", 0),
