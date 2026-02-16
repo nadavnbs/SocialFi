@@ -1,9 +1,14 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timezone
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv(Path(__file__).parent / '.env')
 
 MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-DB_NAME = os.environ.get('DB_NAME', 'infofi_db')
+DB_NAME = os.environ.get('DB_NAME', 'test_database')
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
