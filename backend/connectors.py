@@ -110,22 +110,29 @@ class RedditConnector(BaseConnector):
         try:
             # Normalize URL and add .json
             clean_url = url.split("?")[0].rstrip("/")
-            if not clean_url.endswith(".json"):
-                clean_url += ".json"
             
             # Handle redd.it short URLs
             if "redd.it" in url:
                 response = await self.client.get(url, follow_redirects=True)
-                clean_url = str(response.url).split("?")[0].rstrip("/") + ".json"
+                clean_url = str(response.url).split("?")[0].rstrip("/")
             
-            response = await self.client.get(clean_url)
-            response.raise_for_status()
-            data = response.json()
+            # Use old.reddit.com for fetching
+            if "reddit.com" in clean_url and "old.reddit.com" not in clean_url:
+                clean_url = clean_url.replace("www.reddit.com", "old.reddit.com").replace("reddit.com", "old.reddit.com")
             
-            # Reddit returns array for post pages
-            if isinstance(data, list) and len(data) > 0:
-                post_data = data[0].get("data", {}).get("children", [{}])[0].get("data", {})
-                return self._normalize_post(post_data)
+            json_url = clean_url + ".json" if not clean_url.endswith(".json") else clean_url
+            
+            response = await self.client.get(json_url, params={"raw_json": 1})
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Reddit returns array for post pages
+                if isinstance(data, list) and len(data) > 0:
+                    post_data = data[0].get("data", {}).get("children", [{}])[0].get("data", {})
+                    return self._normalize_post(post_data)
+            else:
+                logger.warning(f"Reddit fetch_by_url returned {response.status_code}")
                 
         except Exception as e:
             logger.error(f"Reddit fetch_by_url error: {e}")
