@@ -14,7 +14,7 @@ class SignatureVerifier:
         try:
             logger.info(f"Verifying EVM signature for address: {address}")
             logger.info(f"Message: {message[:50]}...")
-            logger.info(f"Signature: {signature[:20]}...")
+            logger.info(f"Signature: {signature[:50]}...")
             
             if not Web3.is_address(address):
                 logger.error(f"Invalid address format: {address}")
@@ -22,9 +22,15 @@ class SignatureVerifier:
             
             checksum_address = Web3.to_checksum_address(address)
             
+            # Ensure signature has 0x prefix
+            if not signature.startswith('0x'):
+                signature = '0x' + signature
+            
             # Try personal_sign format (most wallets use this)
             message_hash = encode_defunct(text=message)
-            recovered_address = Web3.eth.account.recover_message(message_hash, signature=signature)
+            
+            from web3.auto import w3
+            recovered_address = w3.eth.account.recover_message(message_hash, signature=signature)
             
             logger.info(f"Recovered address: {recovered_address}")
             logger.info(f"Expected address: {checksum_address}")
