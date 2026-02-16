@@ -43,14 +43,19 @@ class RedditConnector(BaseConnector):
     
     network = NetworkSource.REDDIT
     BASE_URL = "https://www.reddit.com"
+    # Alternative: use old.reddit.com which is less restrictive
+    OLD_URL = "https://old.reddit.com"
     
     def __init__(self):
+        # Reddit requires a descriptive User-Agent for API access
         self.client = httpx.AsyncClient(
             headers={
-                "User-Agent": "SocialFi-Ingestion/1.0 (content aggregator)",
-                "Accept": "application/json"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/json, text/html",
+                "Accept-Language": "en-US,en;q=0.9",
             },
-            timeout=30.0
+            timeout=30.0,
+            follow_redirects=True
         )
     
     def can_handle_url(self, url: str) -> bool:
@@ -64,26 +69,40 @@ class RedditConnector(BaseConnector):
     async def fetch_trending(self, limit: int = 50) -> List[UnifiedPost]:
         """Fetch hot posts from r/all (public, no auth)"""
         posts = []
-        try:
-            response = await self.client.get(
-                f"{self.BASE_URL}/r/all/hot.json",
-                params={"limit": min(limit, 100)}
-            )
-            response.raise_for_status()
-            data = response.json()
-            
-            for child in data.get("data", {}).get("children", []):
-                post_data = child.get("data", {})
-                if post_data.get("is_self") or post_data.get("stickied"):
-                    continue
+        
+        # Try multiple subreddits as fallback
+        subreddits_to_try = ["popular", "all", "pics", "funny", "news"]
+        
+        for subreddit in subreddits_to_try:
+            try:
+                # Use old.reddit.com which is more permissive
+                response = await self.client.get(
+                    f"{self.OLD_URL}/r/{subreddit}/hot.json",
+                    params={"limit": min(limit, 50), "raw_json": 1}
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
                     
-                unified = self._normalize_post(post_data)
-                if unified:
-                    posts.append(unified)
+                    for child in data.get("data", {}).get("children", []):
+                        post_data = child.get("data", {})
+                        if post_data.get("stickied"):
+                            continue
+                            
+                        unified = self._normalize_post(post_data)
+                        if unified:
+                            posts.append(unified)
                     
-        except Exception as e:
-            logger.error(f"Reddit fetch_trending error: {e}")
-            
+                    if posts:
+                        logger.info(f"Reddit fetched {len(posts)} posts from r/{subreddit}")
+                        break
+                else:
+                    logger.warning(f"Reddit r/{subreddit} returned {response.status_code}")
+                    
+            except Exception as e:
+                logger.error(f"Reddit r/{subreddit} error: {e}")
+                continue
+        
         return posts[:limit]
     
     async def fetch_by_url(self, url: str) -> Optional[UnifiedPost]:
