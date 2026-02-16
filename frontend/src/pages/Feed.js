@@ -25,7 +25,7 @@ const SORT_OPTIONS = [
 ];
 
 export default function Feed() {
-  const { user, isAuthenticated, logout, refreshUser } = useAuth();
+  const { user, isAuthenticated, logout, refreshUser, connectedAddress } = useAuth();
   const history = useHistory();
   
   const [posts, setPosts] = useState([]);
