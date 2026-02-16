@@ -1,19 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useHistory } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import axios from 'axios';
 import { toast, Toaster } from 'sonner';
-import { Eye, EyeOff, TrendingUp, Users, Zap, ArrowRight, Globe } from 'lucide-react';
+import { TrendingUp, Users, Zap, Wallet, ArrowRight, Globe, CheckCircle } from 'lucide-react';
 
 export default function LandingPage() {
   const history = useHistory();
-  const { isAuthenticated, login, register, loading } = useAuth();
+  const { isAuthenticated, connectedAddress, chainName, connectWallet, authenticate, loading } = useAuth();
   
-  const [isLoginMode, setIsLoginMode] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [challenge, setChallenge] = useState(null);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated && !loading) {
@@ -21,29 +18,55 @@ export default function LandingPage() {
     }
   }, [isAuthenticated, loading, history]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (isSubmitting) return;
-    
-    setIsSubmitting(true);
+  useEffect(() => {
+    if (connectedAddress && !isAuthenticated) {
+      requestChallenge();
+    }
+  }, [connectedAddress, isAuthenticated]);
+
+  const requestChallenge = async () => {
     try {
-      if (isLoginMode) {
-        await login(email, password);
-        toast.success('Welcome back!');
-      } else {
-        if (username.length < 3) {
-          toast.error('Username must be at least 3 characters');
-          return;
-        }
-        await register(email, password, username);
-        toast.success('Account created! Welcome to SocialFi');
-      }
-      history.push('/feed');
+      const response = await axios.post('/auth/challenge', {
+        wallet_address: connectedAddress,
+        chain_type: chainName || 'ethereum'
+      });
+      setChallenge(response.data.challenge);
+      toast.info('Sign the message to authenticate');
     } catch (error) {
-      const message = error.response?.data?.detail || 'Something went wrong';
-      toast.error(message);
+      toast.error('Failed to get challenge');
+    }
+  };
+
+  const handleConnect = async () => {
+    try {
+      await connectWallet();
+      toast.success('Wallet connected!');
+    } catch (error) {
+      toast.error(error.message || 'Failed to connect wallet');
+    }
+  };
+
+  const handleSignAndAuthenticate = async () => {
+    if (!challenge || isAuthenticating || !connectedAddress) return;
+    
+    setIsAuthenticating(true);
+    try {
+      const signature = await window.ethereum.request({
+        method: 'personal_sign',
+        params: [challenge, connectedAddress],
+      });
+
+      if (signature) {
+        await authenticate(signature, challenge);
+        toast.success('Welcome to SocialFi!');
+        history.push('/feed');
+      }
+    } catch (error) {
+      console.error('Sign error:', error);
+      toast.error('Authentication failed: ' + (error.message || 'Please try again'));
+      setChallenge(null);
     } finally {
-      setIsSubmitting(false);
+      setIsAuthenticating(false);
     }
   };
 
@@ -119,7 +142,7 @@ export default function LandingPage() {
             <div className="grid grid-cols-3 gap-6">
               {[
                 { icon: Globe, label: 'Networks', value: '5+' },
-                { icon: Users, label: 'Active Traders', value: '1K+' },
+                { icon: Users, label: 'Traders', value: '1K+' },
                 { icon: Zap, label: 'Markets', value: 'Real-time' },
               ].map((stat, i) => (
                 <div key={i} className="text-center">
@@ -132,115 +155,86 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Right side - Auth form */}
+        {/* Right side - Wallet connect */}
         <div className="flex-1 flex items-center justify-center px-8 py-12 lg:py-0">
           <div className="w-full max-w-md">
             <div className="bg-zinc-900/80 backdrop-blur-xl border border-zinc-800 rounded-2xl p-8 shadow-2xl">
-              {/* Tabs */}
-              <div className="flex mb-8 bg-zinc-800 rounded-lg p-1">
-                <button
-                  onClick={() => setIsLoginMode(true)}
-                  className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all ${
-                    isLoginMode 
-                      ? 'bg-emerald-500 text-black' 
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                  data-testid="login-tab"
-                >
-                  Sign In
-                </button>
-                <button
-                  onClick={() => setIsLoginMode(false)}
-                  className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all ${
-                    !isLoginMode 
-                      ? 'bg-emerald-500 text-black' 
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                  data-testid="register-tab"
-                >
-                  Create Account
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold text-white mb-2 text-center">Connect Wallet</h2>
+              <p className="text-zinc-400 text-sm text-center mb-8">
+                Sign in with your Web3 wallet to start trading
+              </p>
 
-              <form onSubmit={handleSubmit} className="space-y-5">
-                {!isLoginMode && (
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-2">Username</label>
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                      placeholder="Choose a username"
-                      className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
-                      required={!isLoginMode}
-                      minLength={3}
-                      maxLength={30}
-                      data-testid="username-input"
-                    />
+              {!connectedAddress ? (
+                <div className="space-y-6">
+                  <button
+                    onClick={handleConnect}
+                    className="w-full py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-black font-semibold rounded-xl hover:from-emerald-400 hover:to-emerald-500 transition-all flex items-center justify-center gap-3 group"
+                    data-testid="connect-wallet-button"
+                  >
+                    <Wallet className="w-5 h-5" />
+                    Connect Wallet
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </button>
+
+                  <div className="text-center space-y-2">
+                    <p className="text-xs text-zinc-500">Supported Networks</p>
+                    <div className="flex justify-center gap-2 flex-wrap">
+                      {['Ethereum', 'Base', 'Polygon', 'BNB'].map((chain) => (
+                        <span key={chain} className="px-2 py-1 bg-zinc-800 rounded text-xs text-zinc-400">
+                          {chain}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                )}
 
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
-                    required
-                    data-testid="email-input"
-                  />
+                  <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                    <p className="text-xs text-amber-400 text-center">
+                      🦊 Install MetaMask or Coinbase Wallet to continue
+                    </p>
+                  </div>
                 </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Connected wallet info */}
+                  <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+                    <div className="flex items-center gap-3 mb-3">
+                      <CheckCircle className="w-5 h-5 text-emerald-400" />
+                      <span className="text-sm font-medium text-emerald-400">Wallet Connected</span>
+                    </div>
+                    <div className="font-mono text-sm text-white bg-zinc-800 px-3 py-2 rounded-lg break-all">
+                      {connectedAddress}
+                    </div>
+                    <div className="mt-2 text-xs text-zinc-400">
+                      Network: <span className="text-emerald-400 uppercase">{chainName || 'Unknown'}</span>
+                    </div>
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">Password</label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors pr-12"
-                      required
-                      minLength={6}
-                      data-testid="password-input"
-                    />
+                  {challenge && !isAuthenticating && (
                     <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                      onClick={handleSignAndAuthenticate}
+                      className="w-full py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-black font-semibold rounded-xl hover:from-emerald-400 hover:to-emerald-500 transition-all flex items-center justify-center gap-3"
+                      data-testid="sign-button"
                     >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      Sign Message & Enter
+                      <ArrowRight className="w-4 h-4" />
                     </button>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-black font-semibold rounded-lg hover:from-emerald-400 hover:to-emerald-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
-                  data-testid="submit-button"
-                >
-                  {isSubmitting ? (
-                    <span className="animate-pulse">Processing...</span>
-                  ) : (
-                    <>
-                      {isLoginMode ? 'Sign In' : 'Create Account'}
-                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                    </>
                   )}
-                </button>
-              </form>
 
-              {/* Bonus info */}
-              {!isLoginMode && (
-                <div className="mt-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-                  <p className="text-sm text-emerald-400">
-                    🎁 New accounts receive <span className="font-bold">1,000 credits</span> to start trading!
-                  </p>
+                  {isAuthenticating && (
+                    <div className="text-center py-4">
+                      <div className="text-emerald-400 animate-pulse">Authenticating...</div>
+                      <p className="text-xs text-zinc-500 mt-2">Please confirm in your wallet</p>
+                    </div>
+                  )}
                 </div>
               )}
+
+              {/* Bonus info */}
+              <div className="mt-6 p-4 bg-zinc-800/50 rounded-lg">
+                <p className="text-sm text-zinc-400 text-center">
+                  🎁 New wallets receive <span className="font-bold text-emerald-400">1,000 credits</span>
+                </p>
+              </div>
             </div>
           </div>
         </div>
