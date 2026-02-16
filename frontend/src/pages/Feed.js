@@ -196,6 +196,14 @@ export default function Feed() {
                 <span className="text-xs text-zinc-400">{user?.xp || 0} XP</span>
               </div>
 
+              {connectedAddress && (
+                <div className="hidden md:flex items-center px-3 py-2 bg-zinc-800 rounded-lg">
+                  <span className="text-xs font-mono text-zinc-400">
+                    {connectedAddress.slice(0, 6)}...{connectedAddress.slice(-4)}
+                  </span>
+                </div>
+              )}
+
               <button
                 onClick={logout}
                 className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
