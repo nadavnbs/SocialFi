@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Switch, Route } from 'react-router-dom';
 import axios from 'axios';
 import './index.css';
 import { AuthProvider } from './contexts/AuthContext';
@@ -17,13 +17,13 @@ function App() {
     <AuthProvider>
       <div className="scanlines"></div>
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/feed" element={<Feed />} />
-          <Route path="/portfolio" element={<Portfolio />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/leaderboard" element={<Leaderboard />} />
-        </Routes>
+        <Switch>
+          <Route exact path="/" component={LandingPage} />
+          <Route path="/feed" component={Feed} />
+          <Route path="/portfolio" component={Portfolio} />
+          <Route path="/profile" component={Profile} />
+          <Route path="/leaderboard" component={Leaderboard} />
+        </Switch>
       </BrowserRouter>
     </AuthProvider>
   );
