@@ -379,6 +379,7 @@ async def get_feed(
         {"$limit": limit},
         {
             "$project": {
+                "_id": 0,
                 "id": {"$toString": "$_id"},
                 "source_network": 1,
                 "source_url": 1,
@@ -398,11 +399,17 @@ async def get_feed(
                 "source_created_at": 1,
                 "ingested_at": 1,
                 "market": {
-                    "id": {"$toString": "$market_data._id"},
-                    "price_current": "$market_data.price_current",
-                    "total_supply": "$market_data.total_supply",
-                    "total_volume": "$market_data.total_volume",
-                    "is_frozen": {"$ifNull": ["$market_data.is_frozen", False]}
+                    "$cond": {
+                        "if": {"$ifNull": ["$market_data._id", false]},
+                        "then": {
+                            "id": {"$toString": "$market_data._id"},
+                            "price_current": "$market_data.price_current",
+                            "total_supply": "$market_data.total_supply",
+                            "total_volume": "$market_data.total_volume",
+                            "is_frozen": {"$ifNull": ["$market_data.is_frozen", false]}
+                        },
+                        "else": "$$REMOVE"
+                    }
                 }
             }
         }
@@ -410,14 +417,12 @@ async def get_feed(
     
     posts = await db.unified_posts.aggregate(pipeline).to_list(length=limit)
     
-    # Clean up null markets
+    # Convert datetime fields to strings
     for post in posts:
-        if post.get('market', {}).get('id') is None:
-            post['market'] = None
-        # Convert datetime fields
         for dt_field in ['source_created_at', 'ingested_at']:
-            if post.get(dt_field) and hasattr(post[dt_field], 'isoformat'):
-                post[dt_field] = post[dt_field].isoformat()
+            val = post.get(dt_field)
+            if val and hasattr(val, 'isoformat'):
+                post[dt_field] = val.isoformat()
     
     # Get total count
     total = await db.unified_posts.count_documents(match_stage)
