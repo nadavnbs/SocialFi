@@ -12,16 +12,29 @@ class SignatureVerifier:
     def verify_evm_signature(message: str, signature: str, address: str) -> bool:
         """Verify EVM chain signature (Ethereum, Base, Polygon, BNB)"""
         try:
+            logger.info(f"Verifying EVM signature for address: {address}")
+            logger.info(f"Message: {message[:50]}...")
+            logger.info(f"Signature: {signature[:20]}...")
+            
             if not Web3.is_address(address):
+                logger.error(f"Invalid address format: {address}")
                 return False
             
             checksum_address = Web3.to_checksum_address(address)
+            
+            # Try personal_sign format (most wallets use this)
             message_hash = encode_defunct(text=message)
             recovered_address = Web3.eth.account.recover_message(message_hash, signature=signature)
             
-            return recovered_address.lower() == checksum_address.lower()
+            logger.info(f"Recovered address: {recovered_address}")
+            logger.info(f"Expected address: {checksum_address}")
+            
+            is_valid = recovered_address.lower() == checksum_address.lower()
+            logger.info(f"Signature valid: {is_valid}")
+            
+            return is_valid
         except Exception as e:
-            logger.error(f"EVM signature verification error: {str(e)}")
+            logger.error(f"EVM signature verification error: {str(e)}", exc_info=True)
             return False
     
     @staticmethod
