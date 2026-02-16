@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useHistory } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import { toast, Toaster } from 'sonner';
 
 export default function LandingPage() {
-  const navigate = useNavigate();
+  const history = useHistory();
   const { isAuthenticated, connectedAddress, web3, chainName, connectWallet, authenticate } = useAuth();
   
   const [challenge, setChallenge] = useState(null);
