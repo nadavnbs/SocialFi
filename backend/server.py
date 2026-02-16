@@ -341,14 +341,14 @@ async def get_available_networks():
 @api_router.post("/posts/paste-url")
 async def paste_url(
     data: PasteURLRequest,
-    user_id: str = Depends(get_current_user_optional),
+    wallet_address: str = Depends(get_current_user_optional),
     db=Depends(get_db)
 ):
     """
     List a market by pasting a social media post URL.
     Works for any supported network. Falls back to embed preview if full fetch fails.
     """
-    if not user_id:
+    if not wallet_address:
         raise HTTPException(status_code=401, detail="Authentication required")
     
     url = data.url.strip()
@@ -394,7 +394,7 @@ async def paste_url(
     post_dict = post.model_dump()
     post_dict["source_network"] = post.source_network.value
     post_dict["status"] = PostStatus.ACTIVE.value
-    post_dict["listed_by"] = user_id
+    post_dict["listed_by"] = wallet_address
     
     result = await db.unified_posts.insert_one(post_dict)
     post_id = str(result.inserted_id)
@@ -409,7 +409,7 @@ async def paste_url(
         "creator_earnings": 0.0,
         "liquidity_pool": 0.0,
         "is_frozen": False,
-        "listed_by": user_id,
+        "listed_by": wallet_address,
         "created_at": datetime.now(timezone.utc)
     }
     
@@ -418,7 +418,7 @@ async def paste_url(
     
     # Reward user for listing
     await db.users.update_one(
-        {"_id": ObjectId(user_id)},
+        {"wallet_address": wallet_address.lower()},
         {"$inc": {"xp": 25, "reputation": 0.1}}
     )
     
@@ -437,11 +437,11 @@ async def paste_url(
 @api_router.post("/trades/buy")
 async def buy_shares(
     trade: TradeRequest,
-    user_id: str = Depends(get_current_user_optional),
+    wallet_address: str = Depends(get_current_user_optional),
     db=Depends(get_db)
 ):
     """Buy shares in a post's market"""
-    if not user_id:
+    if not wallet_address:
         raise HTTPException(status_code=401, detail="Authentication required")
     
     market = await db.markets.find_one({"_id": ObjectId(trade.market_id)})
@@ -450,7 +450,7 @@ async def buy_shares(
     if market.get("is_frozen"):
         raise HTTPException(status_code=400, detail="Market is frozen")
     
-    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    user = await db.users.find_one({"wallet_address": wallet_address.lower()})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -481,7 +481,7 @@ async def buy_shares(
     # Update user balance
     new_balance = user["balance_credits"] - cost_calc["total_cost"]
     await db.users.update_one(
-        {"_id": ObjectId(user_id)},
+        {"wallet_address": wallet_address.lower()},
         {
             "$set": {"balance_credits": new_balance},
             "$inc": {"xp": 10}
@@ -490,7 +490,7 @@ async def buy_shares(
     
     # Update/create position
     position = await db.positions.find_one({
-        "user_id": user_id,
+        "wallet_address": wallet_address.lower(),
         "market_id": trade.market_id
     })
     
