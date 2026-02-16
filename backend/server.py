@@ -3,12 +3,11 @@ Main FastAPI server for SocialFi Multi-Network Ingestion Platform
 """
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import os
 import logging
-import bcrypt
 import re
 from pathlib import Path
 from dotenv import load_dotenv
@@ -16,12 +15,13 @@ from bson import ObjectId
 
 from database import get_db, init_db
 from models import (
-    NetworkSource, PostStatus, UserRegister, UserLogin, UserResponse,
+    NetworkSource, PostStatus,
     UnifiedPost, TradeRequest, PasteURLRequest, FeedFilter
 )
 from connectors import connector_registry
 from amm import calculate_buy_cost, calculate_sell_revenue, distribute_fees, get_price
-from auth import create_access_token, decode_token, get_current_user_optional
+from auth import create_access_token, get_current_user_optional, generate_challenge
+from signature_verification import SignatureVerifier
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
