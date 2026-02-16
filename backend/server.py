@@ -847,7 +847,6 @@ async def sell_shares(
     
     # Calculate revenue
     revenue_calc = calculate_sell_revenue(market["total_supply"], trade.shares)
-    fees = distribute_fees(revenue_calc["fee"])
     current_version = market.get("version", 0)
     
     # Invariant checks
