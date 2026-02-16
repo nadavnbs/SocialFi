@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 class WalletChallengeRequest(BaseModel):
     wallet_address: str = Field(min_length=26, max_length=200)
-    chain_type: str = Field(regex="^(ethereum|base|polygon|bnb|solana)$")
+    chain_type: str = Field(pattern="^(ethereum|base|polygon|bnb|solana)$")
 
 class SignatureVerifyRequest(BaseModel):
     wallet_address: str
