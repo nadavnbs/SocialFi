@@ -55,7 +55,7 @@ export default function LandingPage() {
       if (signature) {
         await authenticate(signature, challenge);
         toast.success('🎮 Welcome to the Arcade!');
-        navigate('/feed');
+        history.push('/feed');
       }
     } catch (error) {
       toast.error('Authentication failed');
