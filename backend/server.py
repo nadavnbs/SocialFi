@@ -145,7 +145,7 @@ class TradeRequest(BaseModel):
     def validate_market_id(cls, v):
         try:
             ObjectId(v)
-        except:
+        except Exception:
             raise ValueError("Invalid market_id format")
         return v
 
