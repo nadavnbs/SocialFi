@@ -1086,6 +1086,213 @@ async def health_check(db=Depends(get_db)):
         }
 
 
+# ============== FARCASTER FRAME ENDPOINTS ==============
+
+from farcaster_frames import (
+    FrameActionPayload,
+    validate_frame_message,
+    generate_market_preview_frame,
+    generate_trade_success_frame,
+    generate_error_frame,
+    process_frame_buy,
+    frame_rate_limiter,
+    frame_nonce_tracker
+)
+from fastapi.responses import HTMLResponse
+
+
+@api_router.get("/frames/market/{market_id}", response_class=HTMLResponse)
+async def get_market_frame(
+    request: Request,
+    market_id: str,
+    db=Depends(get_db)
+):
+    """
+    Get Farcaster Frame for a market.
+    Returns HTML with Frame meta tags for Warpcast.
+    """
+    market_oid = validate_object_id(market_id, "market_id")
+    market = await db.markets.find_one({"_id": market_oid})
+    
+    if not market:
+        raise HTTPException(status_code=404, detail="Market not found")
+    
+    # Get post data
+    post = await db.unified_posts.find_one({"_id": ObjectId(market["post_id"])})
+    post_title = post.get("title") or post.get("content_text", "")[:60] if post else "Unknown Post"
+    
+    # Get base URL from request
+    base_url = str(request.base_url).rstrip('/')
+    if 'localhost' not in base_url:
+        base_url = base_url.replace('http://', 'https://')
+    
+    # Calculate 24h change (placeholder - would need historical data)
+    price_change_24h = 0.0
+    volume_24h = market.get("total_volume", 0)
+    
+    html = generate_market_preview_frame(
+        market_id=market_id,
+        post_title=post_title,
+        current_price=market["price_current"],
+        price_change_24h=price_change_24h,
+        volume_24h=volume_24h,
+        base_url=base_url
+    )
+    
+    return HTMLResponse(content=html)
+
+
+@api_router.post("/frames/action/{market_id}", response_class=HTMLResponse)
+@limiter.limit("30/minute")
+async def handle_frame_action(
+    request: Request,
+    market_id: str,
+    db=Depends(get_db)
+):
+    """
+    Handle Farcaster Frame button clicks.
+    
+    Buttons:
+    1: Buy 1 Share
+    2: Buy 5 Shares
+    3: View Market (link)
+    4: Refresh
+    """
+    try:
+        # Parse frame payload
+        body = await request.json()
+        payload = FrameActionPayload(**body)
+        
+        # Validate frame message
+        validation = await validate_frame_message(payload)
+        
+        if not validation.is_valid:
+            base_url = str(request.base_url).rstrip('/')
+            return HTMLResponse(content=generate_error_frame(
+                validation.error or "Invalid frame message",
+                market_id,
+                base_url
+            ))
+        
+        # Check replay attack
+        message_hash = payload.trustedData.get('messageBytes', '')[:64]
+        if message_hash and not frame_nonce_tracker.check_and_record(message_hash):
+            base_url = str(request.base_url).rstrip('/')
+            return HTMLResponse(content=generate_error_frame(
+                "Replay detected - please try again",
+                market_id,
+                base_url
+            ))
+        
+        fid = validation.fid
+        button_index = validation.button_index
+        base_url = str(request.base_url).rstrip('/')
+        
+        # Handle button actions
+        if button_index == 1:
+            # Buy 1 share
+            result = await process_frame_buy(fid, market_id, 1.0, db)
+        elif button_index == 2:
+            # Buy 5 shares
+            result = await process_frame_buy(fid, market_id, 5.0, db)
+        elif button_index == 4:
+            # Refresh - return updated market frame
+            return await get_market_frame(request, market_id, db)
+        else:
+            # Button 3 is a link (handled by client)
+            return await get_market_frame(request, market_id, db)
+        
+        # Return appropriate frame based on result
+        if result.get("success"):
+            market = await db.markets.find_one({"_id": ObjectId(market_id)})
+            return HTMLResponse(content=generate_trade_success_frame(
+                market_id=market_id,
+                shares_bought=result["shares"],
+                price_paid=result["estimated_cost"],
+                new_position=result["shares"],  # Would need to look up actual position
+                base_url=base_url
+            ))
+        else:
+            return HTMLResponse(content=generate_error_frame(
+                result.get("error", "Trade failed"),
+                market_id,
+                base_url
+            ))
+            
+    except Exception as e:
+        logger.error(f"Frame action error: {e}")
+        base_url = str(request.base_url).rstrip('/')
+        return HTMLResponse(content=generate_error_frame(
+            "Internal error - please try again",
+            market_id,
+            base_url
+        ))
+
+
+@api_router.get("/frames/image/{market_id}")
+async def get_frame_image(
+    request: Request,
+    market_id: str,
+    db=Depends(get_db)
+):
+    """
+    Generate dynamic frame image for market.
+    Returns a redirect to a generated image URL.
+    
+    In production, this would generate an actual image using
+    a service like Vercel OG or a custom image generation endpoint.
+    """
+    market_oid = validate_object_id(market_id, "market_id")
+    market = await db.markets.find_one({"_id": market_oid})
+    
+    if not market:
+        raise HTTPException(status_code=404, detail="Market not found")
+    
+    post = await db.unified_posts.find_one({"_id": ObjectId(market["post_id"])})
+    
+    # For now, return placeholder image data
+    # In production: generate image with price, title, etc.
+    from fastapi.responses import JSONResponse
+    
+    return JSONResponse({
+        "image_data": {
+            "market_id": market_id,
+            "title": post.get("title", "")[:50] if post else "",
+            "price": market["price_current"],
+            "supply": market["total_supply"],
+            "volume": market["total_volume"],
+            "network": post.get("source_network") if post else "unknown"
+        },
+        "note": "In production, this would return an actual PNG/JPEG image"
+    })
+
+
+@api_router.get("/frames/leaderboard", response_class=HTMLResponse)
+async def get_leaderboard_frame(
+    request: Request,
+    db=Depends(get_db)
+):
+    """Get Farcaster Frame for top traders leaderboard."""
+    from farcaster_frames import generate_frame_html
+    
+    base_url = str(request.base_url).rstrip('/')
+    
+    # Get top 5 traders
+    top_traders = await db.users.find({}).sort("xp", -1).limit(5).to_list(5)
+    
+    html = generate_frame_html(
+        title="🏆 SocialFi Top Traders",
+        image_url=f"{base_url}/api/frames/leaderboard-image",
+        buttons=[
+            {"label": "View Full Leaderboard", "action": "link", "target": f"{base_url}/leaderboard"},
+            {"label": "🔄 Refresh", "action": "post"}
+        ],
+        post_url=f"{base_url}/api/frames/leaderboard"
+    )
+    
+    return HTMLResponse(content=html)
+
+
 # Include router
 app.include_router(api_router)
 
@@ -1095,3 +1302,4 @@ async def startup_event():
     """Application startup handler."""
     await init_db()
     logger.info(f"✅ SocialFi API started (env={security_config.env})")
+
