@@ -135,29 +135,48 @@ SocialFi is a multi-network content ingestion and trading platform where viral p
 ## Test Results (Updated Feb 2025)
 
 ```
-Backend Unit Tests: 50/50 passed ✅
+Backend Unit Tests: 85/85 passed ✅
 - AMM calculations: 19 tests
 - SIWE authentication: 14 tests  
 - Security config: 17 tests (includes SystemExit validation)
+- Stress validation: 18 tests (concurrency, horizontal scaling, security abuse)
+- Farcaster Frames: 17 tests (generation, validation, security)
 
 API Integration: All endpoints verified
 - Health, Feed, Networks, Challenge, Leaderboard
 - Protected endpoints return 401 without auth
 - Production security enforcement validated
+- Farcaster Frame endpoints deployed
 ```
+
+---
+
+## Farcaster Frames (NEW)
+
+Frame endpoints for viral trading directly in Warpcast:
+- `GET /api/frames/market/{id}` - Market preview frame
+- `POST /api/frames/action/{id}` - Handle frame button clicks
+- `GET /api/frames/leaderboard` - Top traders frame
+
+Features:
+- Quick Buy (1 or 5 shares) via frame buttons
+- Replay attack prevention
+- Per-FID rate limiting
+- Signature validation ready for Neynar Hub
 
 ---
 
 ## Marketing Strategy
 
-See `/app/MARKETING.md` for complete guerrilla crypto marketing plan.
+See `/app/MARKETING.md` for basic marketing plan.
+See `/app/DOMINATION_STRATEGY.md` for execution-level 14-day viral ignition plan.
 
 **Key Strategies:**
-- Crypto Twitter activation with alpha calls
-- Farcaster Frames for native trading
-- Reddit organic community building
-- Trading competitions and referral system
-- Portfolio sharing viral mechanics
+- 14-day viral ignition calendar with exact copy
+- Liquidity theater for price movement marketing
+- Creator capture with revenue sharing
+- Psychological hooks (loss aversion, FOMO leaderboards)
+- Escape velocity metrics tracking
 
 ---
 
