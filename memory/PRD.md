@@ -132,18 +132,32 @@ SocialFi is a multi-network content ingestion and trading platform where viral p
 
 ---
 
-## Test Results
+## Test Results (Updated Feb 2025)
 
 ```
-Backend Unit Tests: 39/39 passed
+Backend Unit Tests: 50/50 passed ✅
 - AMM calculations: 19 tests
 - SIWE authentication: 14 tests  
-- Security config: 6 tests
+- Security config: 17 tests (includes SystemExit validation)
 
 API Integration: All endpoints verified
 - Health, Feed, Networks, Challenge, Leaderboard
 - Protected endpoints return 401 without auth
+- Production security enforcement validated
 ```
+
+---
+
+## Marketing Strategy
+
+See `/app/MARKETING.md` for complete guerrilla crypto marketing plan.
+
+**Key Strategies:**
+- Crypto Twitter activation with alpha calls
+- Farcaster Frames for native trading
+- Reddit organic community building
+- Trading competitions and referral system
+- Portfolio sharing viral mechanics
 
 ---
 
