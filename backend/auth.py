@@ -1,6 +1,6 @@
 """
 JWT authentication module.
-Uses security config for secret validation.
+Uses security config for validated secret.
 """
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -8,20 +8,23 @@ from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os
-import secrets
-
-# Import will validate security on first access
-from security import get_security_config
 
 ALGORITHM = os.environ.get('JWT_ALGORITHM', 'HS256')
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get('JWT_EXPIRATION', 1440))
 
 security = HTTPBearer(auto_error=False)
 
+# Lazy import to avoid circular dependency
+_jwt_secret = None
+
 
 def get_jwt_secret() -> str:
     """Get validated JWT secret from security config."""
-    return get_security_config().jwt_secret
+    global _jwt_secret
+    if _jwt_secret is None:
+        from security import get_security_config
+        _jwt_secret = get_security_config().get_jwt_secret()
+    return _jwt_secret
 
 
 def create_access_token(wallet_address: str, expires_delta: Optional[timedelta] = None) -> str:
@@ -39,8 +42,7 @@ def create_access_token(wallet_address: str, expires_delta: Optional[timedelta] 
         'type': 'access'
     })
     
-    encoded_jwt = jwt.encode(to_encode, get_jwt_secret(), algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(to_encode, get_jwt_secret(), algorithm=ALGORITHM)
 
 
 def decode_token(token: str) -> str:
@@ -52,7 +54,7 @@ def decode_token(token: str) -> str:
         if wallet_address is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail='Invalid token: missing subject'
+                detail='Invalid token'
             )
         
         return wallet_address
@@ -75,9 +77,7 @@ async def get_current_user(
             headers={'WWW-Authenticate': 'Bearer'}
         )
     
-    token = credentials.credentials
-    wallet_address = decode_token(token)
-    return wallet_address
+    return decode_token(credentials.credentials)
 
 
 async def get_current_user_optional(
@@ -88,34 +88,6 @@ async def get_current_user_optional(
         return None
     
     try:
-        token = credentials.credentials
-        wallet_address = decode_token(token)
-        return wallet_address
+        return decode_token(credentials.credentials)
     except HTTPException:
         return None
-
-
-async def require_admin(
-    current_wallet: str = Depends(get_current_user),
-    db=None
-) -> str:
-    """Require admin role."""
-    from database import get_db
-    
-    if db is None:
-        db = await get_db()
-    
-    user = await db.users.find_one({'wallet_address': current_wallet.lower()})
-    
-    if not user or not user.get('is_admin'):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='Admin access required'
-        )
-    
-    return current_wallet
-
-
-def generate_challenge() -> str:
-    """Generate secure random challenge."""
-    return secrets.token_urlsafe(32)
