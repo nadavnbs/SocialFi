@@ -41,7 +41,6 @@ class TestConcurrencyInvariants:
     def test_concurrent_buy_maintains_supply_invariant(self):
         """100 concurrent buy requests should never result in negative supply."""
         from amm import calculate_buy_cost, calculate_sell_revenue
-        from database import get_sync_db
         
         # Simulate 100 concurrent calculations
         initial_supply = 100.0
