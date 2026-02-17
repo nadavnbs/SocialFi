@@ -292,19 +292,18 @@ class TestFrameSecurityEdgeCases:
     
     @pytest.mark.asyncio
     async def test_handles_invalid_button_index(self):
-        """Should validate button index is 1-4."""
-        from farcaster_frames import FrameActionPayload
+        """Should validate button index is 1-4 in FrameMessage."""
+        from farcaster_frames import FrameMessage
         from pydantic import ValidationError
         
-        # Button index must be 1-4
+        # Button index must be 1-4 in FrameMessage model
         with pytest.raises(ValidationError):
-            FrameActionPayload(
-                untrustedData={
-                    "fid": 12345,
-                    "buttonIndex": 5,  # Invalid
-                    "timestamp": int(time.time() * 1000)
-                },
-                trustedData={}
+            FrameMessage(
+                fid=12345,
+                url="https://example.com",
+                messageHash="abc123",
+                timestamp=int(time.time() * 1000),
+                buttonIndex=5  # Invalid - must be 1-4
             )
     
     def test_state_encoding(self):
