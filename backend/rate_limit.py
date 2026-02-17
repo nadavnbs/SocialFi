@@ -1,7 +1,8 @@
 """
-Rate limiting configuration and middleware.
-Uses slowapi for request rate limiting.
+Rate limiting configuration with Redis backend for horizontal scaling.
+Uses slowapi with Redis storage for distributed rate limiting.
 """
+import os
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 def get_client_ip(request: Request) -> str:
     """
     Get client IP from request, handling proxies.
+    Properly handles X-Forwarded-For from reverse proxies.
     """
     # Check X-Forwarded-For header (from reverse proxy)
     forwarded = request.headers.get('x-forwarded-for')
@@ -31,11 +33,30 @@ def get_client_ip(request: Request) -> str:
     return get_remote_address(request)
 
 
-# Create limiter instance
+def get_storage_uri() -> str:
+    """
+    Get rate limiter storage URI.
+    Uses Redis if REDIS_URL is set, otherwise falls back to memory.
+    """
+    redis_url = os.environ.get('REDIS_URL')
+    env = os.environ.get('ENV', 'development')
+    
+    if redis_url:
+        logger.info(f"Rate limiter using Redis: {redis_url.split('@')[-1] if '@' in redis_url else redis_url}")
+        return redis_url
+    
+    if env == 'production':
+        logger.warning("⚠️ REDIS_URL not set in production - rate limiting will not scale horizontally")
+    
+    logger.info("Rate limiter using in-memory storage")
+    return "memory://"
+
+
+# Create limiter instance with dynamic storage
 limiter = Limiter(
     key_func=get_client_ip,
-    default_limits=["1000/hour"],  # Global default
-    storage_uri="memory://",  # In-memory for single instance; use Redis for distributed
+    default_limits=["1000/hour"],
+    storage_uri=get_storage_uri(),
     strategy="fixed-window"
 )
 
@@ -55,17 +76,20 @@ RATE_LIMITS = {
 
 def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     """Custom handler for rate limit exceeded errors."""
-    logger.warning(f"Rate limit exceeded: {get_client_ip(request)} on {request.url.path}")
+    # Log without sensitive data
+    logger.warning(f"Rate limit exceeded on {request.url.path}")
+    
+    retry_after = getattr(exc, 'retry_after', 60)
     
     return JSONResponse(
         status_code=429,
         content={
             "error": "rate_limit_exceeded",
-            "detail": f"Too many requests. Limit: {exc.detail}",
-            "retry_after": getattr(exc, 'retry_after', 60)
+            "detail": f"Too many requests. Please wait {retry_after} seconds.",
+            "retry_after": retry_after
         },
         headers={
-            "Retry-After": str(getattr(exc, 'retry_after', 60)),
+            "Retry-After": str(retry_after),
             "X-RateLimit-Limit": str(exc.detail) if exc.detail else "unknown"
         }
     )
@@ -75,5 +99,6 @@ def setup_rate_limiting(app):
     """Configure rate limiting for the FastAPI app."""
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, custom_rate_limit_handler)
-    logger.info("✅ Rate limiting configured")
+    storage_type = "Redis" if "redis" in get_storage_uri() else "memory"
+    logger.info(f"✅ Rate limiting configured ({storage_type} backend)")
     return limiter
